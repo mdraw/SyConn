@@ -26,6 +26,29 @@ subp_work_folder = "%s/SUBP/" % home_dir
 username = getpass.getuser()
 python_path = sys.executable
 
+# with py 3.6 the pool class was refactored and NoDaemonProcess impl. are not that straight forward
+#  anymore, see: https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic?rq=1
+if not (sys.version_info[0] == 3 and sys.version_info[1] > 5):
+    # found NoDaemonProcess on stackexchange by Chris Arndt - enables
+    # hierarchical multiprocessing
+    class NoDaemonProcess(Process):
+        # make 'daemon' attribute always return False
+        def _get_daemon(self):
+            return False
+
+        def _set_daemon(self, value):
+            pass
+
+        daemon = property(_get_daemon, _set_daemon)
+
+
+    # We sub-class multi_proc.pool.Pool instead of multi_proc.Pool
+    # because the latter is only a wrapper function, not a proper class.
+    class MyPool(multiprocessing.pool.Pool):
+        Process = NoDaemonProcess
+else:
+    MyPool = multiprocessing.pool.Pool
+
 
 def start_multiprocess(func, params, debug=False, verbose=False, nb_cpus=None):
     """
@@ -43,22 +66,6 @@ def start_multiprocess(func, params, debug=False, verbose=False, nb_cpus=None):
     result: list
         list of function returns
     """
-    # found NoDaemonProcess on stackexchange by Chris Arndt - enables
-    # hierarchical multiprocessing
-    class NoDaemonProcess(Process):
-        # make 'daemon' attribute always return False
-        def _get_daemon(self):
-            return False
-
-        def _set_daemon(self, value):
-            pass
-        daemon = property(_get_daemon, _set_daemon)
-
-    # We sub-class multi_proc.pool.Pool instead of multi_proc.Pool
-    # because the latter is only a wrapper function, not a proper class.
-    class MyPool(multiprocessing.pool.Pool):
-        Process = NoDaemonProcess
-
     if nb_cpus is None:
         nb_cpus = max(cpu_count(), 1)
 
@@ -86,11 +93,14 @@ def start_multiprocess(func, params, debug=False, verbose=False, nb_cpus=None):
 def start_multiprocess_imap(func, params, debug=False, verbose=False,
                             nb_cpus=None, show_progress=True):
     """
+    Multiprocessing method which supports progress bar (therefore using
+    imap instead of map). # TODO: support generator params
 
     Parameters
     ----------
     func : function
-    params : function parameters
+    params : Iterable
+        function parameters
     debug : boolean
     verbose : bool
     nb_cpus : int
@@ -101,24 +111,10 @@ def start_multiprocess_imap(func, params, debug=False, verbose=False,
     result: list
         list of function returns
     """
-    # found NoDaemonProcess on stackexchange by Chris Arndt - enables
-    # hierarchical multiprocessing
-    class NoDaemonProcess(Process):
-        # make 'daemon' attribute always return False
-        def _get_daemon(self):
-            return False
-
-        def _set_daemon(self, value):
-            pass
-        daemon = property(_get_daemon, _set_daemon)
-
-    # We sub-class multi_proc.pool.Pool instead of multi_proc.Pool
-    # because the latter is only a wrapper function, not a proper class.
-    class MyPool(multiprocessing.pool.Pool):
-        Process = NoDaemonProcess
-
     if nb_cpus is None:
-        nb_cpus = min(cpu_count(), len(params))
+        nb_cpus = cpu_count()
+
+    nb_cpus = min(nb_cpus, len(params))
 
     if debug:
         nb_cpus = 1
@@ -130,16 +126,19 @@ def start_multiprocess_imap(func, params, debug=False, verbose=False,
     if nb_cpus > 1:
         pool = MyPool(nb_cpus)
         if show_progress:
-            result = list(tqdm.tqdm(pool.imap(func, params), total=len(params), ncols=80, leave=False,
-                             unit='jobs', unit_scale=True, dynamic_ncols=False, mininterval=1))
+            result = list(tqdm.tqdm(pool.imap(func, params), total=len(params),
+                                    ncols=80, leave=False, unit='jobs',
+                                    unit_scale=True, dynamic_ncols=False,
+                                    mininterval=1))
         else:
-            result = pool.imap(func, params)
+            result = list(pool.imap(func, params))
         pool.close()
         pool.join()
     else:
         if show_progress:
-            pbar = tqdm.tqdm(total=len(params), ncols=80, leave=False, mininterval=1,
-                                    unit='jobs', unit_scale=True, dynamic_ncols=False)
+            pbar = tqdm.tqdm(total=len(params), ncols=80, leave=False,
+                             mininterval=1, unit='jobs', unit_scale=True,
+                             dynamic_ncols=False)
             result = []
             for p in params:
                 result.append(func(p))
@@ -162,7 +161,7 @@ def start_multiprocess_obj(func_name, params, debug=False, verbose=False,
     Parameters
     ----------
     func_name : str
-    params : list of list
+    params : List[List]
         each element in params must be object with attribute func_name
         (+ optional: kwargs)
     debug : boolean
@@ -171,25 +170,9 @@ def start_multiprocess_obj(func_name, params, debug=False, verbose=False,
 
     Returns
     -------
-    result: list
+    result: List
         list of function returns
     """
-    # found NoDaemonProcess on stackexchange by Chris Arndt - enables
-    # hierarchical multiprocessing
-    class NoDaemonProcess(Process):
-        # make 'daemon' attribute always return False
-        def _get_daemon(self):
-            return False
-
-        def _set_daemon(self, value):
-            pass
-        daemon = property(_get_daemon, _set_daemon)
-
-    # We sub-class multi_proc.pool.Pool instead of multi_proc.Pool
-    # because the latter is only a wrapper function, not a proper class.
-    class MyPool(multiprocessing.pool.Pool):
-        Process = NoDaemonProcess
-
     if nb_cpus is None:
         nb_cpus = max(cpu_count(), 1)
 
@@ -211,7 +194,6 @@ def start_multiprocess_obj(func_name, params, debug=False, verbose=False,
     if verbose:
         print("\nTime to compute:", time.time() - start)
     return result
-
 
 
 def SUBP_script(params, name, suffix="", delay=0):

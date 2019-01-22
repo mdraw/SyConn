@@ -16,9 +16,9 @@ except ImportError:
           "Please install fasteners to enable locking (pip install fasteners).")
     LOCKING = False
 import os
-import warnings
 import time
 import shutil
+
 from ..extraction import log_extraction
 from ..handler.basics import write_obj2pkl, load_pkl2obj
 __all__ = ['FSBase', 'BTBase']
@@ -53,7 +53,7 @@ class StorageBase(dict):
         return self._dc_intern.__len__()
 
     def __eq__(self, other):
-        if not isinstance(other, FSBase):
+        if not isinstance(other, StorageBase):
             return False
         return self._dc_intern.__eq__(other._dc_intern)
 
@@ -193,6 +193,10 @@ class FSBase(StorageBase):
     def push(self, dest=None):
         if dest is None:
             dest = self._path
+        if self._path is None:  # support virtual / temporary SSO objects
+            log_extraction.warning('"push" called but Storage object was initialized '
+                                   'with "None". Content will not bw pushed.')
+            return
         write_obj2pkl(dest + ".tmp", self._dc_intern)
         shutil.move(dest + ".tmp", dest)
         if not self.read_only and not self.disable_locking:
@@ -203,7 +207,8 @@ class FSBase(StorageBase):
             source = self._path
         fold, fname = os.path.split(source)
         lock_path = fold + "/." + fname + ".lk"
-        if not os.path.isdir(fold):
+        # only create directory if read_only is false. -> support virtual SSO
+        if not os.path.isdir(fold) and not self.read_only:
             try:
                 os.makedirs(fold)
             except OSError as e:  # if to jobs create the folder at the same time

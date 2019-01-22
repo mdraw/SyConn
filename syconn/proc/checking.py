@@ -10,10 +10,10 @@ except ImportError:
     import pickle as pkl
 import glob
 import os
+
 from ..mp import qsub_utils as qu
 from ..mp import mp_utils as sm
 from.checking_helper import find_missing_overlaycubes_thread
-script_folder = os.path.abspath(os.path.dirname(__file__) + "/../multi_proc/")
 
 
 def find_missing_overlaycubes(path, stride=100, qsub_pe=None, qsub_queue=None,
@@ -32,11 +32,11 @@ def find_missing_overlaycubes(path, stride=100, qsub_pe=None, qsub_queue=None,
         results = sm.start_multiprocess(find_missing_overlaycubes_thread,
                                         multi_params, nb_cpus=nb_cpus)
 
-    elif qu.__QSUB__:
+    elif qu.__BATCHJOB__:
         path_to_out = qu.QSUB_script(multi_params,
                                      "find_missing_overlaycubes",
                                      pe=qsub_pe, queue=qsub_queue,
-                                     script_folder=script_folder,
+                                     script_folder=None,
                                      n_max_co_processes=n_max_co_processes)
 
         out_files = glob.glob(path_to_out + "/*")

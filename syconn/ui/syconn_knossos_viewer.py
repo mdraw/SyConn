@@ -11,7 +11,6 @@ import requests
 import json
 sys.dont_write_bytecode = True
 import time
-import lz4
 import numpy as np
 try:
     try:
@@ -176,6 +175,7 @@ class SyConnGateInteraction(object):
         r = self.session.get(self.server + '/all_syn_meta')
         return json.loads(r.content)
 
+
 class main_class(QtGui.QDialog):
     """
     KNOSSOS plugin class for the SyConn KNOSSOS viewer.
@@ -297,7 +297,7 @@ class main_class(QtGui.QDialog):
         self.populate_ssv_list()
 
         self.populate_syn_list()
-        print('Connected to SyConnFS backend')
+        print('Connected to SyConn gate')
 
         layout.addWidget(self.direct_ssv_id_input, 1, 0, 1, 2)
         layout.addWidget(self.ssv_selector, 2, 0, 1, 1)
@@ -594,7 +594,8 @@ class main_class(QtGui.QDialog):
 
 def lz4stringtoarr(string, dtype=np.float32, shape=None):
     """
-    Converts lz4 compressed string to 1d array.
+    Converts lz4 compressed string to 1d array. Moved here to circumvent
+    a syconn dependency.
 
     Parameters
     ----------
@@ -612,11 +613,12 @@ def lz4stringtoarr(string, dtype=np.float32, shape=None):
     try:
         arr_1d = np.frombuffer(decompress(string), dtype=dtype)
     except Exception as e:
-        print(e + "\nString length:" + len(string))
+        print(str(e) + "\nString length:" + str(len(string)))
         return np.zeros((0,), dtype=dtype)
     if shape is not None:
         arr_1d = arr_1d.reshape(shape)
     return arr_1d
+
 
 if __name__=='__main__':
     A = main_class()

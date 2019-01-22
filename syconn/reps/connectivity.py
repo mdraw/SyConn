@@ -4,7 +4,6 @@
 # Copyright (c) 2016 - now
 # Max-Planck-Institute of Neurobiology, Munich, Germany
 # Authors: Philipp Schubert, Joergen Kornfeld
-
 import matplotlib
 matplotlib.use("Agg", warn=False, force=True)
 import matplotlib.colors as mcolors
@@ -13,26 +12,20 @@ import os
 import re
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-
+import numpy as np
+import pandas
+import scipy.ndimage
 try:
     import cPickle as pkl
 except ImportError:
     import pickle as pkl
-import numpy as np
-import pandas
-import scipy.ndimage
-
-from ..mp import qsub_utils as qu
-from ..mp import mp_utils as sm
-
-script_folder = os.path.abspath(os.path.dirname(__file__) + "/../QSUB_scripts/")
-
 try:
     default_wd_available = True
     from ..config.global_params import wd
 except:
     default_wd_available = False
-
+from ..mp import qsub_utils as qu
+from ..mp import mp_utils as sm
 from ..config import parser
 from . import connectivity_helper as ch
 from . import super_segmentation as ss
@@ -40,6 +33,7 @@ from . import segmentation
 from ..handler.basics import load_pkl2obj, write_obj2pkl
 
 
+# TODO: unclear what and when this was used for, refactor and use in current project
 def make_colormap(seq):
     """Return a LinearSegmentedColormap
     seq: a sequence of floats and RGB-tuples. The floats should be increasing
@@ -59,7 +53,6 @@ def make_colormap(seq):
 
 def diverge_map(low=(239/255., 65/255., 50/255.),
                 high=(39/255., 184/255., 148/255.)):
-#
 # def diverge_map(low=(255/255., 100/255., 80/255.),
 #                 high=(60/255., 200/255., 160/255.)):
     """Low and high are colors that will be used for the two
@@ -67,8 +60,8 @@ def diverge_map(low=(239/255., 65/255., 50/255.),
     or rgb color tuples
     """
     c = mcolors.ColorConverter().to_rgb
-    if isinstance(low, basestring): low = c(low)
-    if isinstance(high, basestring): high = c(high)
+    if isinstance(low, str): low = c(low)
+    if isinstance(high, str): high = c(high)
     return make_colormap([low, c('white'), 0.5, c('white'), high])
 
 
@@ -244,11 +237,11 @@ class ConnectivityMatrix(object):
             results = sm.start_multiprocess(ch.extract_connectivity_thread,
                                             multi_params, nb_cpus=nb_cpus)
 
-        elif qu.__QSUB__:
+        elif qu.__BATCHJOB__:
             path_to_out = qu.QSUB_script(multi_params,
                                          "extract_connectivity",
                                          pe=qsub_pe, queue=qsub_queue,
-                                         script_folder=script_folder)
+                                         script_folder=None)
             out_files = glob.glob(path_to_out + "/*")
             results = []
             for out_file in out_files:
@@ -278,11 +271,11 @@ class ConnectivityMatrix(object):
             results = sm.start_multiprocess(ch.get_sso_specific_info_thread,
                                             multi_params, nb_cpus=nb_cpus)
 
-        elif qu.__QSUB__:
+        elif qu.__BATCHJOB__:
             path_to_out = qu.QSUB_script(multi_params,
                                          "get_sso_specific_info",
                                          pe=qsub_pe, queue=qsub_queue,
-                                         script_folder=script_folder)
+                                         script_folder=None)
             out_files = glob.glob(path_to_out + "/*")
             results = []
             for out_file in out_files:
@@ -681,11 +674,8 @@ def get_sso_specific_info_thread(args):
     ssd = ss.SuperSegmentationDataset(working_dir,
                                       version=ssd_version)
 
-    cm = connectivity.ConnectivityMatrix(working_dir,
-                                         version=version,
-                                         sj_version=sj_version,
-                                         create=False)
-
+    cm = ConnectivityMatrix(working_dir, version=version,
+                            sj_version=sj_version, create=False)
     axoness_entries = []
     cell_types = {}
     blacklist = []
@@ -724,3 +714,4 @@ def get_sso_specific_info_thread(args):
 
     axoness_entries = np.array(axoness_entries, dtype=np.int)
     return axoness_entries, cell_types, shapes, blacklist
+

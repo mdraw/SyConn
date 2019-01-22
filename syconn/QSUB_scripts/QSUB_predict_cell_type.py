@@ -6,12 +6,11 @@
 # Authors: Sven Dorkenwald, Philipp Schubert, Jörgen Kornfeld
 
 import sys
-
+from syconn.reps.super_segmentation_object import celltype_predictor
 try:
     import cPickle as pkl
 except ImportError:
     import pickle as pkl
-from syconn.extraction import cs_processing_steps as cps
 
 path_storage_file = sys.argv[1]
 path_out_file = sys.argv[2]
@@ -24,7 +23,9 @@ with open(path_storage_file, 'rb') as f:
         except EOFError:
             break
 
-out = cps._map_objects_to_conn_thread(args)
+
+ch = args[0]
+missing = celltype_predictor(ch)
 
 with open(path_out_file, "wb") as f:
-    pkl.dump(out, f)
+    pkl.dump(missing, f)

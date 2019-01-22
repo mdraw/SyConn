@@ -7,8 +7,9 @@
 import numpy as np
 from numba import jit
 from scipy import spatial
-from ..proc.graphs import bfs_smoothing
 from knossos_utils.skeleton_utils import load_skeleton
+
+from ..proc.graphs import bfs_smoothing
 
 
 def parse_skelnodes_labels_to_mesh(kzip_path, sso, gt_type, n_voting=40):
@@ -56,7 +57,7 @@ def parse_skelnodes_labels_to_mesh(kzip_path, sso, gt_type, n_voting=40):
 
 def generate_palette(nr_classes, return_rgba=True):
     """
-    Creates a RGB(A) palette for N classes.
+    Creates a RGB(A) palette for N classes. Background label will be highest class label + 1.
 
     Parameters
     ----------
@@ -69,7 +70,7 @@ def generate_palette(nr_classes, return_rgba=True):
     np.array
         Unique color array for N input classes
     """
-    classes_ids = np.arange(nr_classes) #reserve additional class id for background
+    classes_ids = np.arange(nr_classes)  # reserve additional class id for background
     classes_rgb = id2rgb_array_contiguous(classes_ids)  # convention: do not use 1, 1, 1; will be background value
     if return_rgba:
         classes_rgb = np.concatenate([classes_rgb, np.ones(classes_rgb.shape[:-1])[..., None] * 255], axis=1)
@@ -201,6 +202,7 @@ def id2rgb_array(id_arr):
 @jit
 def id2rgb_array_contiguous(id_arr):
     """
+    # TODO: Add rgba implementation to render huge cells with shared context in EGL
     Transforms ID values into the array of RGBs labels based on the assumption
     that 'id_arr' is contiguous index array from 0...len(id_arr).
     Same mapping as 'id2rgb_array'.
