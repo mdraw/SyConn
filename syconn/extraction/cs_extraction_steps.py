@@ -119,7 +119,7 @@ def detect_cs(arr):
     jac[2, 1, 1] = 1
     jac[0, 1, 1] = 1
 
-    edges = scipy.ndimage.convolve(arr.astype(np.int), jac) < 0
+    edges = scipy.ndimage.convolve(arr.astype(np.int), jac) < 0 ## don't implement
 
     edges = edges.astype(np.uint32)
     # edges[arr == 0] = True
@@ -131,7 +131,7 @@ def detect_cs(arr):
     return cs_seg
 
 
-def kernel(chunk, center_id):
+def kernel(chunk, center_id): 
     unique_ids, counts = np.unique(chunk, return_counts=True)
 
     counts[unique_ids == 0] = -1
