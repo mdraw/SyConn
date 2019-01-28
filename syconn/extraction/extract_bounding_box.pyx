@@ -7,6 +7,7 @@ import timeit
 from libc.stdlib cimport rand
 
 
+
 cdef struct point:
 	int xMin, yMin, zMin
 	int xMax, yMax, zMax
