@@ -10,6 +10,10 @@ import os
 import sys
 import time
 import tqdm
+
+sys.path
+sys.path.append('/u/mariakaw/dev/ELEKTRONN2/')
+
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.decomposition import PCA
 from collections import Counter

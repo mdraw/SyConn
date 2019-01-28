@@ -5,6 +5,11 @@
 # Max-Planck-Institute of Neurobiology, Munich, Germany
 # Authors: Philipp Schubert, Joergen Kornfeld
 
+import sys
+sys.path
+sys.path.append('/u/mariakaw/dev/knossos_utils/')
+sys.path.append('/u/mariakaw/dev/SyConn/')
+
 from syconn.exec import exec_syns
 
 

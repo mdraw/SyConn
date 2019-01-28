@@ -5,6 +5,10 @@
 # Max-Planck-Institute of Neurobiology, Munich, Germany
 # Authors: Philipp Schubert, Joergen Kornfeld
 
+import sys
+sys.path
+sys.path.append('/u/mariakaw/dev/knossos_utils/')
+sys.path.append('/u/mariakaw/dev/SyConn/')
 from knossos_utils import knossosdataset
 knossosdataset._set_noprint(True)
 import numpy as np
@@ -12,7 +16,6 @@ import os
 import subprocess
 import glob
 import shutil
-import sys
 import argparse
 
 from syconn.handler.prediction import parse_movement_area_from_zip
@@ -138,4 +141,3 @@ if __name__ == '__main__':
     fname_server = os.path.dirname(os.path.abspath(__file__)) + \
                    '/../kplugin/server.py'
     os.system('python {} --working_dir={} --port=10002'.format(fname_server, example_wd))
-
