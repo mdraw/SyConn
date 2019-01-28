@@ -8,7 +8,7 @@ import logging
 import coloredlogs
 import os
 
-from ..config import global_params
+from .. import global_params
 
 __all__ = ['initialize_logging']
 
@@ -61,14 +61,15 @@ def initialize_logging(log_name, log_dir=global_params.default_log_dir,
 
     """
     logger = logging.getLogger(log_name)
-    coloredlogs.install(level=global_params.log_level, logger=logger)
+    coloredlogs.install(level=global_params.log_level, logger=logger,
+                        reconfigure=False)  # True possibly leads to stderr output
     level = logging.getLevelName(global_params.log_level)
     logger.setLevel(level)
 
     if not global_params.DISABLE_FILE_LOGGING or log_dir is not None:
         # create file handler which logs even debug messages
         if log_dir is None:
-            log_dir = os.path.expanduser('~') + "/SyConn/logs/"
+            log_dir = os.path.expanduser('~') + "/.SyConn/logs/"
         try:
             os.makedirs(log_dir, exist_ok=True)
         except TypeError:

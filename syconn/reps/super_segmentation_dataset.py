@@ -15,38 +15,38 @@ try:
 except ImportError:
     import pickle as pkl
 from knossos_utils import knossosdataset
+knossosdataset._set_noprint(True)
 try:
     from knossos_utils import mergelist_tools
 except ImportError:
     from knossos_utils import mergelist_tools_fallback as mergelist_tools
 from multiprocessing import cpu_count
 from . import segmentation  # TODO: del
-from ..config import parser
 from ..handler.basics import load_pkl2obj, write_obj2pkl
 from ..reps.super_segmentation_helper import create_sso_skeleton
 from ..proc.ssd_assembly import assemble_from_mergelist
-from ..mp import qsub_utils as qu
+from ..mp import batchjob_utils as qu
 from .super_segmentation_object import SuperSegmentationObject
 from ..mp import mp_utils as sm
-try:
-    default_wd_available = True
-    from ..config.global_params import wd
-except:
-    default_wd_available = False
+from .. import global_params
 
 
 class SuperSegmentationDataset(object):
     def __init__(self, working_dir=None, version=None, ssd_type='ssv',
                  version_dict=None, sv_mapping=None, scaling=None, config=None):
         """
+        Class to hold a set of agglomerated supervoxels (SuperSegmentationObject).
 
         Parameters
         ----------
         working_dir : str
-        version : str
+        version : str or int
+        ssd_type : str
         version_dict : dict
         sv_mapping : dict or str
-        scaling : tuple
+        scaling : np.array
+        config : Optional[Config]
+            DynConfig object, see syconn/handler/config.py
         """
         self.ssv_dict = {}
         self.mapping_dict = {}
@@ -58,10 +58,7 @@ class SuperSegmentationDataset(object):
         self._config = config
 
         if working_dir is None:
-            if default_wd_available:
-                self._working_dir = wd
-            else:
-                raise Exception("No working directory (wd) specified in config")
+            self._working_dir = global_params.config.working_dir
         else:
             self._working_dir = working_dir
 
@@ -131,7 +128,7 @@ class SuperSegmentationDataset(object):
     @property
     def config(self):
         if self._config is None:
-            self._config = parser.Config(self.working_dir)
+            self._config = global_params.config
         return self._config
 
     @property
@@ -240,6 +237,14 @@ class SuperSegmentationDataset(object):
                                                     obj_type],
                                                 working_dir=self.working_dir)
 
+    def load_sv_graph(self):
+        if os.path.isfile(self.edgelist_path):
+            g = nx.read_edgelist(self.edgelist_path, nodetype=np.uint)
+            return g
+        else:
+            raise ValueError("Could not find graph data for SSV {}."
+                             "".format(self.id))
+
     def apply_mergelist(self, sv_mapping):
         assemble_from_mergelist(self, sv_mapping)
 
@@ -302,7 +307,7 @@ class SuperSegmentationDataset(object):
         self.save_id_changer()
 
     def save_dataset_deep(self, extract_only=False, attr_keys=(), stride=1000,
-                          qsub_pe=None, qsub_queue=None, nb_cpus=1,
+                          qsub_pe=None, qsub_queue=None, nb_cpus=None,
                           n_max_co_processes=None, new_mapping=True):
         save_dataset_deep(self, extract_only=extract_only,
                           attr_keys=attr_keys, stride=stride,
@@ -321,12 +326,12 @@ class SuperSegmentationDataset(object):
                                  self.working_dir])
 
         if small:
-            if qsub_pe is None and qsub_queue is None:
+            if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
                 results = sm.start_multiprocess(
                     reskeletonize_objects_small_ones_thread,
                     multi_params, nb_cpus=nb_cpus)
 
-            elif qu.__BATCHJOB__:
+            elif qu.batchjob_enabled():
                 path_to_out = qu.QSUB_script(multi_params,
                                              "reskeletonize_objects_small_ones",
                                              n_cores=nb_cpus,
@@ -338,12 +343,12 @@ class SuperSegmentationDataset(object):
                 raise Exception("QSUB not available")
 
         if big:
-            if qsub_pe is None and qsub_queue is None:
+            if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
                 results = sm.start_multiprocess(
                     reskeletonize_objects_big_ones_thread,
                     multi_params, nb_cpus=1)
 
-            elif qu.__BATCHJOB__:
+            elif qu.batchjob_enabled():
                 path_to_out = qu.QSUB_script(multi_params,
                                              "reskeletonize_objects_big_ones",
                                              n_cores=10,
@@ -362,13 +367,13 @@ class SuperSegmentationDataset(object):
             multi_params.append([ssv_id_block, self.version, self.version_dict,
                                  self.working_dir, obj_types, apply_mapping])
 
-        if qsub_pe is None and qsub_queue is None:
+        if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
             results = sm.start_multiprocess(
                 reskeletonize_objects_small_ones_thread,
                 multi_params, nb_cpus=nb_cpus)
             no_skel_cnt = np.sum(results)
 
-        elif qu.__BATCHJOB__:
+        elif qu.batchjob_enabled():
             path_to_out = qu.QSUB_script(multi_params,
                                          "export_skeletons",
                                          n_cores=nb_cpus,
@@ -395,13 +400,13 @@ class SuperSegmentationDataset(object):
             multi_params.append([ssv_id_block, self.version, self.version_dict,
                                  self.working_dir, obj_types])
 
-        if qsub_pe is None and qsub_queue is None:
+        if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
             results = sm.start_multiprocess(
                 associate_objs_with_skel_nodes_thread,
                 multi_params, nb_cpus=nb_cpus)
             no_skel_cnt = np.sum(results)
 
-        elif qu.__BATCHJOB__:
+        elif qu.batchjob_enabled():
             path_to_out = qu.QSUB_script(multi_params,
                                          "associate_objs_with_skel_nodes",
                                          n_cores=nb_cpus,
@@ -419,12 +424,12 @@ class SuperSegmentationDataset(object):
             multi_params.append([ssv_id_block, self.version, self.version_dict,
                                  self.working_dir])
 
-        if qsub_pe is None and qsub_queue is None:
+        if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
             results = sm.start_multiprocess(
                 predict_axoness_skelbased_thread,
                 multi_params, nb_cpus=nb_cpus)
 
-        elif qu.__BATCHJOB__:
+        elif qu.batchjob_enabled():
             path_to_out = qu.QSUB_script(multi_params,
                                          "predict_axoness_skelbased",
                                          n_cores=nb_cpus,
@@ -442,12 +447,12 @@ class SuperSegmentationDataset(object):
             multi_params.append([ssv_id_block, self.version, self.version_dict,
                                  self.working_dir])
 
-        if qsub_pe is None and qsub_queue is None:
+        if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
             results = sm.start_multiprocess(
                 predict_cell_type_skelbased_thread,
                 multi_params, nb_cpus=nb_cpus)
 
-        elif qu.__BATCHJOB__:
+        elif qu.batchjob_enabled():
             path_to_out = qu.QSUB_script(multi_params,
                                          "predict_cell_type_skelbased",
                                          n_cores=nb_cpus,
@@ -491,7 +496,7 @@ class SuperSegmentationDataset(object):
 
 
 def save_dataset_deep(ssd, extract_only=False, attr_keys=(), stride=1000,
-                      qsub_pe=None, qsub_queue=None, nb_cpus=1,
+                      qsub_pe=None, qsub_queue=None, nb_cpus=None,
                       n_max_co_processes=None, new_mapping=True):
     ssd.save_dataset_shallow()
 
@@ -502,12 +507,12 @@ def save_dataset_deep(ssd, extract_only=False, attr_keys=(), stride=1000,
                              ssd.working_dir, extract_only, attr_keys,
                              ssd._type, new_mapping])
 
-    if qsub_pe is None and qsub_queue is None:
+    if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
         results = sm.start_multiprocess(
             _write_super_segmentation_dataset_thread,
             multi_params, nb_cpus=nb_cpus)
 
-    elif qu.__BATCHJOB__:
+    elif qu.batchjob_enabled():
         path_to_out = qu.QSUB_script(multi_params,
                                      "write_super_segmentation_dataset",
                                      pe=qsub_pe, queue=qsub_queue,
@@ -543,8 +548,7 @@ def save_dataset_deep(ssd, extract_only=False, attr_keys=(), stride=1000,
             np.save(ssd.path + "/%ss.npy" % attribute,
                     attr_dict[attribute])
 
-#
-#
+
 def _write_super_segmentation_dataset_thread(args):
     ssv_obj_ids = args[0]
     version = args[1]
@@ -632,11 +636,11 @@ def export_to_knossosdataset(ssd, kd, stride=1000, qsub_pe=None,
         multi_params.append([ssv_id_block, ssd.version, ssd.version_dict,
                              ssd.working_dir, kd.knossos_path, nb_cpus])
 
-    if qsub_pe is None and qsub_queue is None:
+    if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
         results = sm.start_multiprocess(_export_ssv_to_knossosdataset_thread,
                                         multi_params, nb_cpus=nb_cpus)
 
-    elif qu.__BATCHJOB__:
+    elif qu.batchjob_enabled():
         path_to_out = qu.QSUB_script(multi_params,
                                      "export_ssv_to_knossosdataset",
                                      pe=qsub_pe, queue=qsub_queue,
@@ -707,11 +711,11 @@ def convert_knossosdataset(ssd, sv_kd_path, ssv_kd_path,
                              sv_kd_path, ssv_kd_path, offsets,
                              size])
 
-    if qsub_pe is None and qsub_queue is None:
+    if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
         results = sm.start_multiprocess(_convert_knossosdataset_thread,
                                         multi_params, nb_cpus=nb_cpus)
 
-    elif qu.__BATCHJOB__:
+    elif qu.batchjob_enabled():
         path_to_out = qu.QSUB_script(multi_params,
                                      "convert_knossosdataset",
                                      pe=qsub_pe, queue=qsub_queue,
@@ -771,14 +775,14 @@ def export_skeletons(ssd, obj_types, apply_mapping=True, stride=1000,
                          range(0, len(ssd.ssv_ids), stride)]:
         multi_params.append([ssv_id_block, ssd.version, ssd.version_dict,
                              ssd.working_dir, obj_types, apply_mapping])
-    # TODO @Sven: which function is requiered here? I changed it from _export_skeletons to ssh.export_skeletons
-    if qsub_pe is None and qsub_queue is None:
+
+    if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
         results = sm.start_multiprocess(
             export_skeletons_thread,
             multi_params, nb_cpus=nb_cpus)
         no_skel_cnt = np.sum(results)
 
-    elif qu.__BATCHJOB__:
+    elif qu.batchjob_enabled():
         path_to_out = qu.QSUB_script(multi_params,
                                      "export_skeletons",
                                      n_cores=nb_cpus,
@@ -1186,10 +1190,7 @@ def copy_ssvs2new_SSD_simple(ssvs, new_version, target_wd=None, n_jobs=1):
     n_jobs : int
     """
     if target_wd is None:
-        if not default_wd_available:
-            raise ValueError("Global working directory not set, 'target_wd' "
-                             "has to be given.")
-        target_wd = wd
+        target_wd = global_params.config.working_dir
     scaling = ssvs[0].scaling
     new_ssd = SuperSegmentationDataset(working_dir=target_wd, version=new_version,
                                        scaling=scaling)
@@ -1250,6 +1251,7 @@ def map_ssv_semseg(args):
     version_dict = args[2]
     working_dir = args[3]
     kwargs_semseg2mesh = args[4]
+    global_params.wd = working_dir
 
     ssd = SuperSegmentationDataset(working_dir=working_dir, version=version,
                                    version_dict=version_dict)

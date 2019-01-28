@@ -11,18 +11,20 @@ except ImportError:
 
 import glob
 import numpy as np
-import os
 import scipy.ndimage
 import time
 import itertools
 from collections import defaultdict
 from knossos_utils import knossosdataset
+from knossos_utils import chunky
+knossosdataset._set_noprint(True)
 
 from ..reps import segmentation
-from ..mp import qsub_utils as qu
+from ..mp import batchjob_utils as qu
 from ..mp import mp_utils as sm
 from ..handler import compression
 from . import object_extraction_steps as oes
+from . import log_extraction
 
 
 def find_contact_sites(cset, knossos_path, filename='cs', n_max_co_processes=None,
@@ -31,10 +33,10 @@ def find_contact_sites(cset, knossos_path, filename='cs', n_max_co_processes=Non
     for chunk in cset.chunk_dict.values():
         multi_params.append([chunk, knossos_path, filename])
 
-    if qsub_pe is None and qsub_queue is None:
-        results = sm.start_multiprocess(_contact_site_detection_thread,
-                                        multi_params, debug=True)
-    elif qu.__BATCHJOB__:
+    if (qsub_pe is None and qsub_queue is None) or not qu.batchjob_enabled():
+        results = sm.start_multiprocess_imap(_contact_site_detection_thread,
+                                             multi_params, debug=True)
+    elif qu.batchjob_enabled():
         path_to_out = qu.QSUB_script(multi_params,
                                      "contact_site_detection",
                                      script_folder=None,
@@ -48,6 +50,7 @@ def find_contact_sites(cset, knossos_path, filename='cs', n_max_co_processes=Non
                 results.append(pkl.load(f))
     else:
         raise Exception("QSUB not available")
+    chunky.save_dataset(cset)
 
 
 def _contact_site_detection_thread(args):
@@ -161,7 +164,6 @@ def extract_agg_contact_sites(cset, working_dir, filename='cs', hdf5name='cs',
                        nb_cpus=nb_cpus)
     all_times.append(time.time() - time_start)
     step_names.append("voxel extraction")
-    print("\nTime needed for extracting voxels: %.3fs" % all_times[-1])
 
     # --------------------------------------------------------------------------
 
@@ -173,14 +175,13 @@ def extract_agg_contact_sites(cset, working_dir, filename='cs', hdf5name='cs',
                        nb_cpus=nb_cpus)
     all_times.append(time.time() - time_start)
     step_names.append("combine voxels")
-    print("\nTime needed for combining voxels: %.3fs" % all_times[-1])
 
-    print("\nTime overview:")
+    log_extraction.debug("\nTime overview:")
     for ii in range(len(all_times)):
-        print("%s: %.3fs" % (step_names[ii], all_times[ii]))
-    print("--------------------------")
-    print("Total Time: %.1f min" % (np.sum(all_times) / 60.))
-    print("--------------------------\n\n")
+        log_extraction.debug("%s: %.3fs" % (step_names[ii], all_times[ii]))
+    log_extraction.debug("--------------------------")
+    log_extraction.debug("Total Time: %.1f min" % (np.sum(all_times) / 60.))
+    log_extraction.debug("--------------------------\n\n")
 
 
 def _extract_agg_cs_thread(args):

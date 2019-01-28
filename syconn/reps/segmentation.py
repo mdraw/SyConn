@@ -821,9 +821,10 @@ class SegmentationObject(object):
         kml = knossos_ml_from_svixs([self.id], coords=[self.rep_coord])
         write_txt2kzip(dest_path, kml, "mergelist.txt")
 
-    def load_views(self, woglia=True, raw_only=False, ignore_missing=False, index_views=False, view_key=None):
-
-        view_dc = CompressedStorage(self.view_path(woglia=woglia, index_views=index_views, view_key=view_key), disable_locking=not self.enable_locking)
+    def load_views(self, woglia=True, raw_only=False, ignore_missing=False,
+                   index_views=False, view_key=None):
+        view_dc = CompressedStorage(self.view_path(woglia=woglia, index_views=index_views, view_key=view_key),
+                                    disable_locking=not self.enable_locking)
         try:
             views = view_dc[self.id]
         except KeyError as e:
