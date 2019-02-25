@@ -29,9 +29,79 @@ from typing import Callable
 import h5py
 import glob
 from scipy import spatial
+import threading
 import time
 # fix random seed.
 np.random.seed(0)
+
+# --------------------------Elektronn3 - cached MultiviewData Class-------------
+working = False
+if working:
+    class MultiviewData(Dataset):
+        """
+        Multiview spine data loader.
+        """
+        def __init__(self, base_dir, train=True, inp_key='raw', target_key='label', 
+                    transform: Callable = Identity(), num_read_limit=5000):
+            super().__init__()
+
+            self.train = train
+            self.inp_key = inp_key
+            self.target_key = target_key
+            self.transform = transform
+
+            self.cube_id = "train" if train else "valid"
+            self.fnames_inp = sorted(glob.glob(base_dir + "/raw_{}*.h5".format(self.cube_id)))
+            self.fnames_target = sorted(glob.glob(base_dir + "/label_{}*.h5".format(self.cube_id)))
+            print(self.fnames_inp, self.fnames_target)
+            assert len(self.fnames_inp) == len(self.fnames_target)
+
+            self.secondary = None
+            self.secondary_t = None
+            self.read(self, 0)
+            
+            self.primary = self.secondary
+            self.primary_t = self.secondary_t
+            self.close_files()
+
+            self.num_read_limit = num_read_limit  # How many time should a file be read before it is released from memory
+            self.current_count = 0
+            self.file_pointer = 1
+
+        def __getitem__(self, index):
+            if self.current_count <= self.num_read_limit:
+                if self.current_count == self.num_read_limit - 10:
+                    read_thread = threading.Thread(target=self.read, args=[self, self.file_pointer])
+                    read_thread.start()
+                if self.current_count == self.num_read_limit:
+                    read_thread.join()
+                    self.primary = self.secondary
+                    self.primary_t = self.secondary_t
+                    self.secondary = None
+                    self.secondary_t = None
+                    self.file_pointer += 1
+                    self.close_files()
+                
+                self.current_count += 1
+            
+            return self.primary, self.primary_t
+
+        def read(self, index):
+            self.inp_file = h5py.File(os.path.expanduser(self.fnames_inp[index]), 'r')
+            self.target_file = h5py.File(os.path.expanduser(self.fnames_target[index]), 'r')
+            self.secondary = self.inp_file[self.inp_key][()]
+            self.secondary_t = self.target_file[self.target_key][()].astype(np.int64)
+            self.secondary, self.secondary_t = self.transform(self.secondary, self.secondary_t)
+            return self.secondary, self.secondary_t
+
+        def __len__(self):
+            if not self.train:
+                return np.min([500, self.target.shape[0]])
+            return np.min([2500, self.target.shape[0]])  # self.target.shape[0]  # this number determines the epoch size
+
+        def close_files(self):
+            self.inp_file.close()
+            self.target_file.close()
 
 
 # -------------------------------------- elektronn3 ----------------------------
