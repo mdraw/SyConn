@@ -15,7 +15,7 @@ import shutil
 import time
 import tqdm
 from collections import Counter, defaultdict
-from scipy.misc import imsave
+from imageio import imwrite
 from scipy import spatial
 from knossos_utils import skeleton
 from knossos_utils.skeleton_utils import load_skeleton as load_skeleton_kzip
@@ -2454,7 +2454,7 @@ class SuperSegmentationObject(object):
         views = multi_view_sso(self, colors, ws=ws, obj_to_render=obj_to_render)
         if dest_folder:
             for ii, v in enumerate(views):
-                imsave("%s/SSV_%d_%d.png" % (dest_folder, self.id, ii), v)
+                imwrite("%s/SSV_%d_%d.png" % (dest_folder, self.id, ii), v)
         else:
             return views
 

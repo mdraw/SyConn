@@ -22,7 +22,7 @@ from syconn.mp.mp_utils import start_multiprocess_imap
 import re
 from multiprocessing import cpu_count
 import os
-from scipy.misc import imsave
+from imageio import imwrite
 from sklearn.model_selection import train_test_split
 import glob
 global initial_run
@@ -271,8 +271,8 @@ def gt_generation_helper(args):
     # for ii in range(len(raw_views)):
     #     # vc_wire.write_single_plot("{}/{}_raw_wire.png".format(h5py_path, ii), ii)
     #     vc.write_single_plot("{}/{}_raw.png".format(h5py_path, ii), ii)
-    #     imsave(h5py_path + "{}_label.png".format(ii), label_views[:, 0, 0][ii])
-    #     imsave(h5py_path + "{}_index.png".format(ii), colored_indices[:, 0, 0][ii])
+    #     imwrite(h5py_path + "{}_label.png".format(ii), label_views[:, 0, 0][ii])
+    #     imwrite(h5py_path + "{}_index.png".format(ii), colored_indices[:, 0, 0][ii])
     # DEBUG PART END
 
 
